@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, 
   Search, 
@@ -10,6 +10,7 @@ import {
   ShieldCheck, 
   Download
 } from 'lucide-react';
+import { useDebounce } from 'use-debounce';
 import { useSecurity } from '../../context/SecurityContext';
 import { AuditSeverity } from '../../types/audit';
 
@@ -18,12 +19,21 @@ export const AuditLogView: React.FC = () => {
   const [severityFilter, setSeverityFilter] = useState<'ALL' | AuditSeverity>('ALL');
   const [targetFilter, setTargetFilter] = useState<string>('ALL');
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 300);
+
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 15;
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, severityFilter, targetFilter]);
 
   const filtered = auditLogs.filter((log) => {
     if (severityFilter !== 'ALL' && log.severity !== severityFilter) return false;
     if (targetFilter !== 'ALL' && log.targetType !== targetFilter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
       const match =
         log.details.toLowerCase().includes(q) ||
         log.officerName.toLowerCase().includes(q) ||
@@ -33,6 +43,10 @@ export const AuditLogView: React.FC = () => {
     }
     return true;
   });
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedLogs = filtered.slice(startIndex, startIndex + pageSize);
 
   const handleExportCsv = () => {
     const headers = ['Timestamp', 'Officer ID', 'Officer Name', 'Gate', 'Action', 'Target Type', 'Severity', 'Details'];
@@ -137,8 +151,8 @@ export const AuditLogView: React.FC = () => {
       <div className="rounded-xl border border-slate-800 bg-slate-900 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 font-mono text-[11px]">
+            <thead className="bg-slate-950/70 border-b border-slate-800 text-[11px] text-slate-400 tracking-wider uppercase font-mono">
+              <tr>
                 <th className="py-2.5 px-4 font-medium">TIMESTAMP</th>
                 <th className="py-2.5 px-4 font-medium">SEVERITY</th>
                 <th className="py-2.5 px-4 font-medium">ACTION</th>
@@ -147,7 +161,7 @@ export const AuditLogView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
-              {filtered.length === 0 ? (
+              {paginatedLogs.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-slate-400">
                     <ShieldAlert className="w-8 h-8 mx-auto text-slate-600 mb-2" />
@@ -155,7 +169,7 @@ export const AuditLogView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filtered.map((log) => {
+                paginatedLogs.map((log) => {
                   const isAlert = log.severity === 'ALERT';
                   const isWarning = log.severity === 'WARNING';
 
@@ -212,6 +226,32 @@ export const AuditLogView: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-950/80 border-t border-slate-800 text-xs text-slate-400">
+          <div>
+            Showing {filtered.length === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + pageSize, filtered.length)} of {filtered.length} records
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+            >
+              Previous
+            </button>
+            <span className="font-mono text-slate-400">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

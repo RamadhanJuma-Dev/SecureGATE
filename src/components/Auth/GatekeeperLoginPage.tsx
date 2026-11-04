@@ -1,20 +1,48 @@
-import React, { useState } from 'react';
-import { Shield, Lock, ArrowRight, ShieldAlert, KeyRound } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Shield, Lock, ArrowRight, ShieldAlert, KeyRound, Clock } from 'lucide-react';
 import { useSecurity } from '../../context/SecurityContext';
+import { MAX_FAILED_ATTEMPTS } from '../../utils/securityAuth';
 
 interface GatekeeperLoginPageProps {
   onLoginSuccess: () => void;
 }
 
 export const GatekeeperLoginPage: React.FC<GatekeeperLoginPageProps> = ({ onLoginSuccess }) => {
-  const { officers, switchOfficer, settings } = useSecurity();
+  const { officers, switchOfficer, settings, getLockoutStatus, recordFailedAttempt, resetFailedAttempts } = useSecurity();
 
   const [staffIdInput, setStaffIdInput] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+
+  // Lockout countdown timer
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          setErrorMsg('');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lockoutSeconds]);
+
+  // Check lockout on staffId input blur / change
+  const checkCurrentLockout = (id: string) => {
+    if (!id.trim()) return;
+    const status = getLockoutStatus(id.trim().toLowerCase());
+    if (status.isLocked && status.remainingSeconds > 0) {
+      setLockoutSeconds(status.remainingSeconds);
+      setErrorMsg(`Access temporarily locked out. Please wait ${status.remainingSeconds} seconds.`);
+    }
+  };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (lockoutSeconds > 0) return;
     setErrorMsg('');
 
     const inputClean = staffIdInput.trim().toLowerCase();
@@ -30,6 +58,14 @@ export const GatekeeperLoginPage: React.FC<GatekeeperLoginPageProps> = ({ onLogi
       return;
     }
 
+    // Check if account or terminal identifier is locked out
+    const lockout = getLockoutStatus(inputClean);
+    if (lockout.isLocked && lockout.remainingSeconds > 0) {
+      setLockoutSeconds(lockout.remainingSeconds);
+      setErrorMsg(`Access temporarily locked out due to multiple failed attempts. Please wait ${lockout.remainingSeconds} seconds.`);
+      return;
+    }
+
     // Find officer by staff ID (badgeNumber), email, or name
     const officer = officers.find(
       (o) =>
@@ -39,7 +75,21 @@ export const GatekeeperLoginPage: React.FC<GatekeeperLoginPageProps> = ({ onLogi
     );
 
     if (!officer) {
-      setErrorMsg('User not found. Please enter a valid Staff ID or Badge Number.');
+      const res = recordFailedAttempt(inputClean);
+      if (res.isLocked) {
+        setLockoutSeconds(res.remainingSeconds);
+        setErrorMsg(`Too many failed attempts. Terminal access locked out for ${res.remainingSeconds} seconds.`);
+      } else {
+        setErrorMsg(`User not found. Failed attempt ${res.attempts} of ${MAX_FAILED_ATTEMPTS}.`);
+      }
+      return;
+    }
+
+    // Check if officer's badge specifically is locked out
+    const badgeLockout = getLockoutStatus(officer.badgeNumber);
+    if (badgeLockout.isLocked && badgeLockout.remainingSeconds > 0) {
+      setLockoutSeconds(badgeLockout.remainingSeconds);
+      setErrorMsg(`Account ${officer.badgeNumber} is temporarily locked out. Try again in ${badgeLockout.remainingSeconds}s.`);
       return;
     }
 
@@ -48,12 +98,21 @@ export const GatekeeperLoginPage: React.FC<GatekeeperLoginPageProps> = ({ onLogi
       return;
     }
 
-    // Authenticate with PIN / Password
+    // Authenticate with PIN / Password using switchOfficer (handles bcrypt verification and failed attempt tracking)
     const success = switchOfficer(officer.id, pinClean);
     if (success) {
+      resetFailedAttempts(inputClean);
+      resetFailedAttempts(officer.badgeNumber);
+      setLockoutSeconds(0);
       onLoginSuccess();
     } else {
-      setErrorMsg('Incorrect Security PIN / Password. Please check your credentials and try again.');
+      const updatedStatus = getLockoutStatus(officer.badgeNumber);
+      if (updatedStatus.isLocked && updatedStatus.remainingSeconds > 0) {
+        setLockoutSeconds(updatedStatus.remainingSeconds);
+        setErrorMsg(`Account locked out for ${updatedStatus.remainingSeconds} seconds due to ${updatedStatus.attempts} consecutive failed attempts.`);
+      } else {
+        setErrorMsg(`Incorrect Security PIN / Password. Attempt ${updatedStatus.attempts} of ${MAX_FAILED_ATTEMPTS}.`);
+      }
     }
   };
 
@@ -129,10 +188,20 @@ export const GatekeeperLoginPage: React.FC<GatekeeperLoginPageProps> = ({ onLogi
           {/* Submit Button */}
           <button
             type="submit"
-            className="w-full py-3.5 px-4 rounded-2xl bg-sky-600 hover:bg-sky-500 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-sky-600/25 flex items-center justify-center gap-2 transition-all mt-4 cursor-pointer"
+            disabled={lockoutSeconds > 0}
+            className="w-full py-3.5 px-4 rounded-2xl bg-sky-600 hover:bg-sky-500 active:scale-[0.99] disabled:bg-slate-400 disabled:cursor-not-allowed text-white font-bold text-sm shadow-lg shadow-sky-600/25 disabled:shadow-none flex items-center justify-center gap-2 transition-all mt-4 cursor-pointer"
           >
-            <span>Log In</span>
-            <ArrowRight className="w-4 h-4" />
+            {lockoutSeconds > 0 ? (
+              <>
+                <Clock className="w-4 h-4 animate-pulse" />
+                <span>Locked Out ({lockoutSeconds}s)</span>
+              </>
+            ) : (
+              <>
+                <span>Log In</span>
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
           </button>
         </form>
 

@@ -8,6 +8,7 @@ import { SecurityProvider, useSecurity } from './context/SecurityContext';
 
 // Unified Login Page
 import { GatekeeperLoginPage } from './components/Auth/GatekeeperLoginPage';
+import { LockScreenModal } from './components/Auth/LockScreenModal';
 
 // 1. Gate Operations Dashboard (Security Officer)
 import { GatekeeperPortalView } from './components/Dashboard/GatekeeperPortalView';
@@ -55,101 +56,103 @@ function SecuritySystemApp() {
     return <GatekeeperLoginPage onLoginSuccess={() => setIsLoggedIn(true)} />;
   }
 
-  // 2. Role-Based Routing: System Administrator -> System Administration Dashboard
-  if (currentOfficer.role === 'ADMIN') {
-    return <SystemAdminDashboardView onLogout={() => setIsLoggedIn(false)} />;
-  }
-
-  // 3. Role-Based Routing: Security Supervisor -> Security Operations Dashboard
-  if (currentOfficer.role === 'SUPERVISOR') {
-    return (
-      <>
-        <SecuritySupervisorDashboardView
-          onLogout={() => setIsLoggedIn(false)}
-          onSelectPassForDetails={(pass) => setActiveBadgePass(pass)}
-          onSelectTripForDetails={(trip) => setReturnTripModal(trip)}
-        />
-
-        <VisitorPassModal
-          pass={activeBadgePass}
-          isOpen={!!activeBadgePass}
-          onClose={() => setActiveBadgePass(null)}
-          onCheckOut={(pass) => setCheckOutPass(pass)}
-        />
-
-        <VehicleReturnModal
-          trip={returnTripModal}
-          isOpen={!!returnTripModal}
-          onClose={() => setReturnTripModal(null)}
-        />
-      </>
-    );
-  }
-
-  // 4. Role-Based Routing: Management -> Management Overview Dashboard (Read-Only)
-  if (currentOfficer.role === 'MANAGEMENT') {
-    return <ManagementOverviewDashboardView onLogout={() => setIsLoggedIn(false)} />;
-  }
-
-  // 5. Role-Based Routing: Security Officer (OFFICER / GUARD) -> Gate Operations Dashboard
-  // Maintain the ultra-simple, minimal interface for security officers
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#e3f2fd] via-[#edf6fd] to-[#e0f0fe]">
-      <GatekeeperPortalView
-        onLogout={() => setIsLoggedIn(false)}
-        onOpenRegistrations={() => setRegistrationsOpen(true)}
-        onOpenCheckOuts={() => setCheckOutsOpen(true)}
-        onOpenVehicleCheckIns={() => setVehicleCheckInsOpen(true)}
-        onSelectPassForBadge={(pass) => setActiveBadgePass(pass)}
-        onSelectPassForCheckOut={(pass) => setCheckOutPass(pass)}
-        onSelectTripForReturn={(trip) => setReturnTripModal(trip)}
-      />
+    <>
+      <LockScreenModal />
+      {/* 2. Role-Based Routing: System Administrator -> System Administration Dashboard */}
+      {currentOfficer.role === 'ADMIN' && (
+        <SystemAdminDashboardView onLogout={() => setIsLoggedIn(false)} />
+      )}
 
-      {/* Gate Operations Action Modals */}
-      <RegistrationsActionModal
-        isOpen={registrationsOpen}
-        onClose={() => setRegistrationsOpen(false)}
-        onSuccess={(pass) => setActiveBadgePass(pass)}
-      />
+      {/* 3. Role-Based Routing: Security Supervisor -> Security Operations Dashboard */}
+      {currentOfficer.role === 'SUPERVISOR' && (
+        <>
+          <SecuritySupervisorDashboardView
+            onLogout={() => setIsLoggedIn(false)}
+            onSelectPassForDetails={(pass) => setActiveBadgePass(pass)}
+            onSelectTripForDetails={(trip) => setReturnTripModal(trip)}
+          />
 
-      <CheckOutsActionModal
-        isOpen={checkOutsOpen}
-        onClose={() => setCheckOutsOpen(false)}
-        onSelectPassForCheckOut={(pass) => setCheckOutPass(pass)}
-      />
+          <VisitorPassModal
+            pass={activeBadgePass}
+            isOpen={!!activeBadgePass}
+            onClose={() => setActiveBadgePass(null)}
+            onCheckOut={(pass) => setCheckOutPass(pass)}
+          />
 
-      <VehicleCheckInsActionModal
-        isOpen={vehicleCheckInsOpen}
-        onClose={() => setVehicleCheckInsOpen(false)}
-        onSelectTripForReturn={(trip) => setReturnTripModal(trip)}
-      />
+          <VehicleReturnModal
+            trip={returnTripModal}
+            isOpen={!!returnTripModal}
+            onClose={() => setReturnTripModal(null)}
+          />
+        </>
+      )}
 
-      <VehicleDispatchModal
-        vehicle={null}
-        isOpen={dispatchModalOpen}
-        onClose={() => setDispatchModalOpen(false)}
-        onSuccess={() => {}}
-      />
+      {/* 4. Role-Based Routing: Management -> Management Overview Dashboard (Read-Only) */}
+      {currentOfficer.role === 'MANAGEMENT' && (
+        <ManagementOverviewDashboardView onLogout={() => setIsLoggedIn(false)} />
+      )}
 
-      <VisitorPassModal
-        pass={activeBadgePass}
-        isOpen={!!activeBadgePass}
-        onClose={() => setActiveBadgePass(null)}
-        onCheckOut={(pass) => setCheckOutPass(pass)}
-      />
+      {/* 5. Role-Based Routing: Security Officer (OFFICER) -> Gate Operations Dashboard */}
+      {currentOfficer.role === 'OFFICER' && (
+        <div className="min-h-screen bg-gradient-to-b from-[#e3f2fd] via-[#edf6fd] to-[#e0f0fe]">
+          <GatekeeperPortalView
+            onLogout={() => setIsLoggedIn(false)}
+            onOpenRegistrations={() => setRegistrationsOpen(true)}
+            onOpenCheckOuts={() => setCheckOutsOpen(true)}
+            onOpenVehicleCheckIns={() => setVehicleCheckInsOpen(true)}
+            onSelectPassForBadge={(pass) => setActiveBadgePass(pass)}
+            onSelectPassForCheckOut={(pass) => setCheckOutPass(pass)}
+            onSelectTripForReturn={(trip) => setReturnTripModal(trip)}
+          />
 
-      <VisitorCheckOutModal
-        pass={checkOutPass}
-        isOpen={!!checkOutPass}
-        onClose={() => setCheckOutPass(null)}
-      />
+          {/* Gate Operations Action Modals */}
+          <RegistrationsActionModal
+            isOpen={registrationsOpen}
+            onClose={() => setRegistrationsOpen(false)}
+            onSuccess={(pass) => setActiveBadgePass(pass)}
+          />
 
-      <VehicleReturnModal
-        trip={returnTripModal}
-        isOpen={!!returnTripModal}
-        onClose={() => setReturnTripModal(null)}
-      />
-    </div>
+          <CheckOutsActionModal
+            isOpen={checkOutsOpen}
+            onClose={() => setCheckOutsOpen(false)}
+            onSelectPassForCheckOut={(pass) => setCheckOutPass(pass)}
+          />
+
+          <VehicleCheckInsActionModal
+            isOpen={vehicleCheckInsOpen}
+            onClose={() => setVehicleCheckInsOpen(false)}
+            onSelectTripForReturn={(trip) => setReturnTripModal(trip)}
+          />
+
+          <VehicleDispatchModal
+            vehicle={null}
+            isOpen={dispatchModalOpen}
+            onClose={() => setDispatchModalOpen(false)}
+            onSuccess={() => {}}
+          />
+
+          <VisitorPassModal
+            pass={activeBadgePass}
+            isOpen={!!activeBadgePass}
+            onClose={() => setActiveBadgePass(null)}
+            onCheckOut={(pass) => setCheckOutPass(pass)}
+          />
+
+          <VisitorCheckOutModal
+            pass={checkOutPass}
+            isOpen={!!checkOutPass}
+            onClose={() => setCheckOutPass(null)}
+          />
+
+          <VehicleReturnModal
+            trip={returnTripModal}
+            isOpen={!!returnTripModal}
+            onClose={() => setReturnTripModal(null)}
+          />
+        </div>
+      )}
+    </>
   );
 }
 

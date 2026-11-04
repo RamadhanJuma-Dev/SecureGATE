@@ -20,19 +20,52 @@ export const LockScreenModal: React.FC = () => {
     unlockTerminal, 
     settings, 
     activeGate,
-    switchGate 
+    switchGate,
+    getLockoutStatus
   } = useSecurity();
 
   const [selectedOfficerId, setSelectedOfficerId] = useState(currentOfficer.id);
   const [pin, setPin] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [selectedGateId, setSelectedGateId] = useState(settings.currentGateId);
-
-  if (!isLocked) return null;
+  const [lockoutCountdown, setLockoutCountdown] = useState(0);
 
   const targetOfficer = officers.find((o) => o.id === selectedOfficerId) || currentOfficer;
 
+  // Check lockout on mount or when switching selected officer
+  React.useEffect(() => {
+    if (!targetOfficer) return;
+    const status = getLockoutStatus(targetOfficer.badgeNumber);
+    if (status.isLocked && status.remainingSeconds > 0) {
+      setLockoutCountdown(status.remainingSeconds);
+      setErrorMsg(`Account temporarily locked out. Try again in ${status.remainingSeconds}s.`);
+    } else {
+      setLockoutCountdown(0);
+    }
+  }, [targetOfficer?.badgeNumber, getLockoutStatus]);
+
+  // Lockout countdown timer
+  React.useEffect(() => {
+    if (lockoutCountdown <= 0) return;
+    const timer = setInterval(() => {
+      setLockoutCountdown((prev) => {
+        if (prev <= 1) {
+          setErrorMsg('');
+          return 0;
+        }
+        setErrorMsg(`Account temporarily locked out. Try again in ${prev - 1}s.`);
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lockoutCountdown]);
+
+  if (!isLocked) return null;
+
+  const isLockedOut = lockoutCountdown > 0;
+
   const handleDigitClick = (digit: string) => {
+    if (isLockedOut) return;
     if (pin.length < 6) {
       setPin(pin + digit);
       setErrorMsg('');
@@ -40,12 +73,18 @@ export const LockScreenModal: React.FC = () => {
   };
 
   const handleBackspace = () => {
+    if (isLockedOut) return;
     setPin(pin.slice(0, -1));
     setErrorMsg('');
   };
 
   const handleUnlock = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isLockedOut) {
+      setErrorMsg(`Terminal is locked out. Please wait ${lockoutCountdown}s.`);
+      return;
+    }
+
     if (!pin) {
       setErrorMsg('Please enter security clearance PIN.');
       return;
@@ -59,8 +98,15 @@ export const LockScreenModal: React.FC = () => {
     if (success) {
       setPin('');
       setErrorMsg('');
+      setLockoutCountdown(0);
     } else {
-      setErrorMsg('Invalid Security PIN. Access denied.');
+      const status = getLockoutStatus(targetOfficer.badgeNumber);
+      if (status.isLocked && status.remainingSeconds > 0) {
+        setLockoutCountdown(status.remainingSeconds);
+        setErrorMsg(`Account locked out for ${status.remainingSeconds}s due to ${status.attempts} failed attempts.`);
+      } else {
+        setErrorMsg(`Invalid Security PIN. Attempt ${status.attempts} of 5.`);
+      }
       setPin('');
     }
   };
@@ -155,8 +201,8 @@ export const LockScreenModal: React.FC = () => {
             </p>
           )}
 
-          <p className="text-[11px] text-slate-500 font-mono">
-            Demo PINs: James ({targetOfficer.name === 'James O\'Connor' ? '1234' : '1234'}) · Elena (9988) · Admin (0000)
+          <p className="text-[11px] text-slate-400 font-mono">
+            Enter authorized security clearance PIN to proceed
           </p>
         </div>
 
@@ -166,30 +212,34 @@ export const LockScreenModal: React.FC = () => {
             <button
               key={digit}
               type="button"
+              disabled={isLockedOut}
               onClick={() => handleDigitClick(digit)}
-              className="py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-white font-mono text-base font-bold transition-all border border-slate-700/80 shadow-sm"
+              className="py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none text-white font-mono text-base font-bold transition-all border border-slate-700/80 shadow-sm"
             >
               {digit}
             </button>
           ))}
           <button
             type="button"
+            disabled={isLockedOut}
             onClick={handleBackspace}
-            className="py-3 rounded-xl bg-slate-800/50 hover:bg-slate-700 text-slate-400 active:scale-95 text-xs font-mono transition-all border border-slate-700/60"
+            className="py-3 rounded-xl bg-slate-800/50 hover:bg-slate-700 disabled:opacity-30 disabled:pointer-events-none text-slate-400 active:scale-95 text-xs font-mono transition-all border border-slate-700/60"
           >
             DEL
           </button>
           <button
             type="button"
+            disabled={isLockedOut}
             onClick={() => handleDigitClick('0')}
-            className="py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-white font-mono text-base font-bold transition-all border border-slate-700/80 shadow-sm"
+            className="py-3 rounded-xl bg-slate-800/90 hover:bg-slate-700 active:scale-95 disabled:opacity-30 disabled:pointer-events-none text-white font-mono text-base font-bold transition-all border border-slate-700/80 shadow-sm"
           >
             0
           </button>
           <button
             type="button"
+            disabled={isLockedOut}
             onClick={() => handleUnlock()}
-            className="py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1"
+            className="py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 disabled:opacity-30 disabled:pointer-events-none text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-1 cursor-pointer"
           >
             <Unlock className="w-3.5 h-3.5" />
             <span>ENTER</span>

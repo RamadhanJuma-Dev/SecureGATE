@@ -1,6 +1,8 @@
 export type AuditAction = 
   | 'AUTH_LOGIN'
   | 'AUTH_LOGOUT'
+  | 'AUTH_FAILED'
+  | 'AUTH_LOCKOUT'
   | 'AUTH_SWITCH_GATE'
   | 'VISITOR_REGISTER'
   | 'VISITOR_CHECKIN'

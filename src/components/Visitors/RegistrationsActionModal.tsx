@@ -125,12 +125,21 @@ export const RegistrationsActionModal: React.FC<RegistrationsActionModalProps> =
         });
       }
 
+      setFullName('');
+      setIdNumber('');
+      setPhoneNumber('');
+      setCompany('');
+      setHostName('');
+      setVehiclePlate('');
+      setSelectedProfile(null);
+      setAssets([]);
       setIsSubmitting(false);
       onSuccess(pass);
       onClose();
     } catch (err: any) {
       setIsSubmitting(false);
-      alert(err?.message || 'Error checking in guest.');
+      const errMsg = err?.message || err?.error_description || 'Error checking in guest.';
+      alert(`Database Error: ${errMsg}`);
     }
   };
 

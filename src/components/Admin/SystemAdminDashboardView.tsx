@@ -21,10 +21,15 @@ import {
   Check, 
   KeyRound, 
   ShieldAlert,
-  Key
+  Key,
+  Cloud,
+  Copy,
+  RefreshCw
 } from 'lucide-react';
 import { useSecurity } from '../../context/SecurityContext';
 import { UserRole, getRoleDisplayName } from '../../types/auth';
+import { SUPABASE_SQL_SCHEMA } from '../../data/supabaseSql';
+import { SUPABASE_URL, SUPABASE_PROJECT_ID } from '../../lib/supabase';
 
 interface SystemAdminDashboardViewProps {
   onLogout: () => void;
@@ -47,6 +52,11 @@ export const SystemAdminDashboardView: React.FC<SystemAdminDashboardViewProps> =
     auditLogs,
     exportBackupJson,
     resetAllData,
+    cloudConnected,
+    cloudSyncing,
+    lastCloudSync,
+    pushAllDataToSupabase,
+    refreshFromSupabase,
   } = useSecurity();
 
   // Active Admin Tab
@@ -250,6 +260,10 @@ export const SystemAdminDashboardView: React.FC<SystemAdminDashboardViewProps> =
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 tracking-wide uppercase hidden sm:inline-block">
                   {settings.organizationShortName || settings.organizationName || 'SECUREGATE'}
                 </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 tracking-wide flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Supabase Active</span>
+                </span>
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
                 Staff ID: {currentOfficer.badgeNumber} • RBAC & System Administration Control Panel
@@ -354,7 +368,7 @@ export const SystemAdminDashboardView: React.FC<SystemAdminDashboardViewProps> =
             }`}
           >
             <Database className="w-4 h-4" />
-            <span>System Maintenance</span>
+            <span>Cloud DB & Maintenance</span>
           </button>
         </div>
 
@@ -967,48 +981,171 @@ export const SystemAdminDashboardView: React.FC<SystemAdminDashboardViewProps> =
           </div>
         )}
 
-        {/* TAB 6: SYSTEM MAINTENANCE */}
+        {/* TAB 6: CLOUD DATABASE & SYSTEM MAINTENANCE */}
         {activeTab === 'backup' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <div className="bg-white rounded-3xl border border-sky-100 p-6 space-y-4 shadow-sm">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Download className="w-5 h-5 text-sky-600" />
-                <span>Export System Data Backup</span>
-              </h2>
-              <p className="text-xs text-slate-500">
-                Download a complete JSON snapshot of all user accounts, visitor records, vehicle dispatches, and configuration settings.
-              </p>
-              <button
-                type="button"
-                onClick={exportBackupJson}
-                className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-sky-600/20"
-              >
-                <Download className="w-4 h-4" />
-                <span>Download Secure JSON Backup</span>
-              </button>
+          <div className="space-y-6">
+            {/* Supabase Cloud Connection Panel */}
+            <div className="bg-white rounded-3xl border border-sky-100 p-6 shadow-sm space-y-5">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-6 h-6 text-sky-600" />
+                    <h2 className="text-base font-bold text-slate-900">
+                      Supabase Cloud Database (PostgreSQL)
+                    </h2>
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1.5 ${
+                      cloudConnected
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                        : 'bg-amber-50 text-amber-700 border border-amber-200'
+                    }`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${cloudConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                      <span>{cloudConnected ? 'Connected & Active' : 'Connecting / Offline'}</span>
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Project: <span className="font-semibold text-slate-700">Securegate</span> • ID: <span className="font-mono text-sky-700 font-bold">{SUPABASE_PROJECT_ID}</span> • Host: <span className="font-mono text-slate-600">{SUPABASE_URL}</span>
+                  </p>
+                </div>
+
+                {lastCloudSync && (
+                  <span className="text-[11px] font-mono text-slate-400 bg-slate-50 px-3 py-1 rounded-xl border border-slate-200">
+                    Last Cloud Sync: {lastCloudSync}
+                  </span>
+                )}
+              </div>
+
+              {/* Status & Sync Actions */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <button
+                  type="button"
+                  disabled={cloudSyncing}
+                  onClick={async () => {
+                    showNotification('Pushing all local records to Supabase...');
+                    const ok = await pushAllDataToSupabase();
+                    if (ok) {
+                      showNotification('All records successfully synchronized to Supabase Cloud Database!');
+                    } else {
+                      showNotification('Saved to Supabase storage collection. Check schema if granular tables are missing.');
+                    }
+                  }}
+                  className="p-4 rounded-2xl bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 text-left transition-all active:scale-[0.99] flex flex-col justify-between space-y-2 cursor-pointer shadow-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs">Push All to Supabase</span>
+                    <Cloud className={`w-4 h-4 text-sky-600 ${cloudSyncing ? 'animate-bounce' : ''}`} />
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Upload all officers, visitors, passes, vehicles, trips, and settings to Supabase.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  disabled={cloudSyncing}
+                  onClick={async () => {
+                    showNotification('Refreshing latest records from Supabase...');
+                    await refreshFromSupabase();
+                    showNotification('Loaded latest data from Supabase Cloud Database.');
+                  }}
+                  className="p-4 rounded-2xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-left transition-all active:scale-[0.99] flex flex-col justify-between space-y-2 cursor-pointer shadow-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs">Pull Latest from Cloud</span>
+                    <RefreshCw className={`w-4 h-4 text-emerald-600 ${cloudSyncing ? 'animate-spin' : ''}`} />
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Fetch real-time records updated by other security terminals or supervisors.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+                    showNotification('Supabase SQL Schema copied to clipboard! Paste in Supabase SQL Editor.');
+                  }}
+                  className="p-4 rounded-2xl bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 text-left transition-all active:scale-[0.99] flex flex-col justify-between space-y-2 cursor-pointer shadow-xs"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs">Copy Supabase SQL Schema</span>
+                    <Copy className="w-4 h-4 text-indigo-600" />
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    1-Click copy of tables, RLS policies, indexes, and seed schema for your database.
+                  </p>
+                </button>
+              </div>
+
+              {/* SQL Info Box */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-700">PostgreSQL Schema Quick View (8 Tables)</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const blob = new Blob([SUPABASE_SQL_SCHEMA], { type: 'text/sql' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = 'securegate_supabase_schema.sql';
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      showNotification('Downloaded securegate_supabase_schema.sql');
+                    }}
+                    className="text-[11px] text-sky-700 hover:text-sky-800 font-bold underline"
+                  >
+                    Download schema.sql
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500 leading-relaxed font-mono">
+                  Tables configured: <span className="font-bold text-slate-800">officers</span>, <span className="font-bold text-slate-800">visitor_profiles</span>, <span className="font-bold text-slate-800">visitor_passes</span>, <span className="font-bold text-slate-800">vehicles</span>, <span className="font-bold text-slate-800">trips</span>, <span className="font-bold text-slate-800">audit_logs</span>, <span className="font-bold text-slate-800">settings</span>, <span className="font-bold text-slate-800">securegate_store</span>.
+                </p>
+              </div>
             </div>
 
-            <div className="bg-white rounded-3xl border border-rose-200 p-6 space-y-4 shadow-sm">
-              <h2 className="text-base font-bold text-rose-700 flex items-center gap-2">
-                <RotateCcw className="w-5 h-5 text-rose-600" />
-                <span>Reset to Factory State</span>
-              </h2>
-              <p className="text-xs text-slate-500">
-                Resets the system database back to initial seed data. All temporary test passes and records will be replaced with baseline test data.
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  if (confirm('Are you sure you want to reset all data to default demo state?')) {
-                    resetAllData();
-                    showNotification('System database reset to initial demonstration state.');
-                  }
-                }}
-                className="px-5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center gap-2 transition-all"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Reset All System Data</span>
-              </button>
+            {/* Existing JSON Backup & Factory Reset */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="bg-white rounded-3xl border border-sky-100 p-6 space-y-4 shadow-sm">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Download className="w-5 h-5 text-sky-600" />
+                  <span>Export Offline JSON Backup</span>
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Download a local JSON snapshot of all user accounts, visitor records, vehicle dispatches, and configuration settings.
+                </p>
+                <button
+                  type="button"
+                  onClick={exportBackupJson}
+                  className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-2 transition-all shadow-md shadow-sky-600/20 cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download Secure JSON Backup</span>
+                </button>
+              </div>
+
+              <div className="bg-white rounded-3xl border border-rose-200 p-6 space-y-4 shadow-sm">
+                <h2 className="text-base font-bold text-rose-700 flex items-center gap-2">
+                  <RotateCcw className="w-5 h-5 text-rose-600" />
+                  <span>Reset to Factory State</span>
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Resets the system database back to initial seed data. All temporary test passes and records will be replaced with baseline test data.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm('Are you sure you want to reset all data to default demo state?')) {
+                      resetAllData();
+                      showNotification('System database reset to initial demonstration state.');
+                    }
+                  }}
+                  className="px-5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs flex items-center gap-2 transition-all cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>Reset All System Data</span>
+                </button>
+              </div>
             </div>
           </div>
         )}

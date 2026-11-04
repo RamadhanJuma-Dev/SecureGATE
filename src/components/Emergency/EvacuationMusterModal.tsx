@@ -12,6 +12,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { useSecurity } from '../../context/SecurityContext';
+import { getDerivedPassStatus } from '../../utils/visitorUtils';
 
 interface EvacuationMusterModalProps {
   isOpen: boolean;
@@ -33,9 +34,10 @@ export const EvacuationMusterModal: React.FC<EvacuationMusterModalProps> = ({ is
   if (!isOpen) return null;
 
   // Souls on site = all active visitors
-  const onSitePasses = visitorPasses.filter(
-    (p) => p.status === 'ON_SITE' || p.status === 'OVERDUE'
-  );
+  const onSitePasses = visitorPasses.filter((p) => {
+    const status = getDerivedPassStatus(p);
+    return status === 'ON_SITE' || status === 'OVERDUE';
+  });
 
   const totalSouls = onSitePasses.length;
   const accountedCount = onSitePasses.filter((p) => accountedMusterList.has(p.id)).length;

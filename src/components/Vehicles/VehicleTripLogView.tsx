@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeftRight, 
   Search, 
@@ -13,6 +13,7 @@ import {
   FileCheck,
   ChevronDown
 } from 'lucide-react';
+import { useDebounce } from 'use-debounce';
 import { useSecurity } from '../../context/SecurityContext';
 import { VehicleTrip } from '../../types/vehicle';
 
@@ -27,13 +28,22 @@ export const VehicleTripLogView: React.FC<VehicleTripLogViewProps> = ({
 }) => {
   const { trips } = useSecurity();
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'RETURNED'>('ALL');
   const [expandedTripId, setExpandedTripId] = useState<string | null>(null);
 
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 15;
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter]);
+
   const filtered = trips.filter((t) => {
     if (statusFilter !== 'ALL' && t.status !== statusFilter) return false;
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
       const match =
         t.tripPassNumber.toLowerCase().includes(q) ||
         t.fleetNumber.toLowerCase().includes(q) ||
@@ -49,6 +59,10 @@ export const VehicleTripLogView: React.FC<VehicleTripLogViewProps> = ({
 
   const activeCount = trips.filter((t) => t.status === 'ACTIVE').length;
   const returnedCount = trips.filter((t) => t.status === 'RETURNED').length;
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedTrips = filtered.slice(startIndex, startIndex + pageSize);
 
   return (
     <div className="space-y-4">
@@ -99,7 +113,7 @@ export const VehicleTripLogView: React.FC<VehicleTripLogViewProps> = ({
             onClick={() => setStatusFilter('RETURNED')}
             className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
               statusFilter === 'RETURNED'
-                ? 'bg-emerald-950 text-emerald-300 border border-emerald-800 shadow-sm'
+                ? 'bg-slate-800 text-white shadow-sm'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -107,43 +121,43 @@ export const VehicleTripLogView: React.FC<VehicleTripLogViewProps> = ({
           </button>
         </div>
 
-        <div className="relative flex-1 max-w-sm">
+        <div className="relative flex-1 max-w-md">
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search trip ID, driver, fleet ID, destination..."
+            placeholder="Search trip pass #, fleet #, plate, driver, destination..."
             className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950/60 border border-slate-800 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-emerald-500"
           />
         </div>
       </div>
 
-      {/* Trips Table */}
+      {/* Main Table */}
       <div className="rounded-xl border border-slate-800 bg-slate-900 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 font-mono text-[11px]">
-                <th className="py-3 px-4 font-medium">TRIP PASS & VEHICLE</th>
-                <th className="py-3 px-4 font-medium">DRIVER & DEPT</th>
-                <th className="py-3 px-4 font-medium">DESTINATION & PURPOSE</th>
-                <th className="py-3 px-4 font-medium">DEPARTURE</th>
-                <th className="py-3 px-4 font-medium">RETURN & DISTANCE</th>
-                <th className="py-3 px-4 font-medium">STATUS</th>
-                <th className="py-3 px-4 font-medium text-right">ACTIONS</th>
+            <thead className="bg-slate-950/70 border-b border-slate-800 text-[11px] text-slate-400 tracking-wider uppercase font-mono">
+              <tr>
+                <th className="py-2.5 px-4 font-medium">TRIP & VEHICLE</th>
+                <th className="py-2.5 px-4 font-medium">ASSIGNED DRIVER</th>
+                <th className="py-2.5 px-4 font-medium">DESTINATION & PURPOSE</th>
+                <th className="py-2.5 px-4 font-medium">SCHEDULE</th>
+                <th className="py-2.5 px-4 font-medium">ODOMETER & USAGE</th>
+                <th className="py-2.5 px-4 font-medium">STATUS</th>
+                <th className="py-2.5 px-4 font-medium text-right">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
-              {filtered.length === 0 ? (
+              {paginatedTrips.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
                     <Truck className="w-8 h-8 mx-auto text-slate-600 mb-2" />
-                    <p className="text-sm font-medium text-slate-300">No vehicle movement records found</p>
+                    <p className="text-sm font-medium text-slate-300">No organizational vehicle trips found</p>
                   </td>
                 </tr>
               ) : (
-                filtered.map((trip) => {
+                paginatedTrips.map((trip) => {
                   const isActive = trip.status === 'ACTIVE';
                   const isReturned = trip.status === 'RETURNED';
                   const isExpanded = expandedTripId === trip.id;
@@ -151,99 +165,87 @@ export const VehicleTripLogView: React.FC<VehicleTripLogViewProps> = ({
                   return (
                     <React.Fragment key={trip.id}>
                       <tr className="hover:bg-slate-800/40 transition-colors">
-                        {/* Vehicle & Trip ID */}
+                        {/* Trip & Vehicle */}
                         <td className="py-3 px-4">
-                          <p className="font-mono font-bold text-emerald-400 text-[11px]">
-                            {trip.tripPassNumber}
+                          <p className="font-bold text-white flex items-center gap-1.5">
+                            <span className="text-amber-400 font-mono text-[11px]">{trip.tripPassNumber}</span>
                           </p>
-                          <p className="font-bold text-white text-xs mt-0.5">
-                            {trip.fleetNumber} · <span className="font-mono text-slate-300">{trip.plateNumber}</span>
+                          <p className="font-semibold text-slate-200 mt-0.5">
+                            {trip.fleetNumber} · <span className="font-mono text-slate-400">{trip.plateNumber}</span>
                           </p>
-                          <p className="text-[10px] text-slate-400">{trip.makeModel}</p>
+                          <p className="text-[10px] text-slate-500">{trip.makeModel}</p>
                         </td>
 
                         {/* Driver */}
                         <td className="py-3 px-4">
-                          <p className="font-semibold text-white">{trip.driverName}</p>
-                          <p className="font-mono text-[11px] text-slate-400">
-                            {trip.driverEmployeeId}
+                          <p className="font-medium text-white">{trip.driverName}</p>
+                          <p className="text-[11px] text-slate-400 font-mono">
+                            ID: {trip.driverEmployeeId}
                           </p>
                           <p className="text-[10px] text-slate-500">{trip.department}</p>
                         </td>
 
                         {/* Destination */}
-                        <td className="py-3 px-4 max-w-xs">
-                          <p className="font-medium text-slate-200 truncate">{trip.destination}</p>
-                          <p className="text-[11px] text-slate-400 truncate">{trip.purpose}</p>
-                          {trip.passengersList && (
-                            <p className="text-[10px] text-slate-500 truncate mt-0.5">
-                              Roster: {trip.passengersList}
+                        <td className="py-3 px-4">
+                          <p className="font-medium text-slate-200">{trip.destination}</p>
+                          <p className="text-[10px] text-slate-400">{trip.purpose}</p>
+                        </td>
+
+                        {/* Schedule */}
+                        <td className="py-3 px-4 font-mono text-[11px]">
+                          <p className="text-slate-300">
+                            Dep: {new Date(trip.departureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          {isReturned && trip.actualReturnTime ? (
+                            <p className="text-emerald-400">
+                              Ret: {new Date(trip.actualReturnTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                          ) : (
+                            <p className="text-amber-400/80">
+                              Exp: {new Date(trip.expectedReturnTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </p>
                           )}
                         </td>
 
-                        {/* Departure */}
+                        {/* Odometer */}
                         <td className="py-3 px-4 font-mono text-[11px]">
-                          <p className="text-slate-200 font-semibold">
-                            {new Date(trip.departureTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <p className="text-slate-400">
+                            Start: {trip.departureOdometer.toLocaleString()} km
                           </p>
-                          <p className="text-slate-500 text-[10px]">
-                            {new Date(trip.departureTime).toLocaleDateString()}
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            Odo: {trip.departureOdometer.toLocaleString()} km
-                          </p>
-                          <p className="text-[10px] text-amber-400">
-                            Fuel: {trip.departureFuelPercent}%
-                          </p>
-                        </td>
-
-                        {/* Return */}
-                        <td className="py-3 px-4 font-mono text-[11px]">
-                          {isReturned && trip.actualReturnTime ? (
-                            <>
-                              <p className="text-emerald-400 font-semibold">
-                                {new Date(trip.actualReturnTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                              <p className="text-slate-500 text-[10px]">
-                                {new Date(trip.actualReturnTime).toLocaleDateString()}
-                              </p>
-                              <p className="text-[11px] text-white font-bold">
-                                {trip.distanceTraveledKm} km driven
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="text-amber-400">
-                                Exp: {new Date(trip.expectedReturnTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                              <p className="text-[10px] text-slate-500">Currently deployed</p>
-                            </>
+                          {trip.returnOdometer && (
+                            <p className="text-slate-200 font-semibold">
+                              End: {trip.returnOdometer.toLocaleString()} km
+                            </p>
+                          )}
+                          {trip.distanceTraveledKm !== undefined && (
+                            <span className="text-[10px] text-emerald-400 font-bold">
+                              +{trip.distanceTraveledKm} km covered
+                            </span>
                           )}
                         </td>
 
                         {/* Status */}
                         <td className="py-3 px-4">
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-semibold ${
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
                               isActive
-                                ? 'bg-amber-950 text-amber-300 border border-amber-800 animate-pulse'
+                                ? 'bg-amber-950 text-amber-300 border border-amber-800'
                                 : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                             }`}
                           >
                             {isActive ? <Clock className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
-                            {isActive ? 'ACTIVE ON TRIP' : 'RETURNED & SIGNED'}
+                            {trip.status}
                           </span>
                         </td>
 
-                        {/* Action */}
+                        {/* Actions */}
                         <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => setExpandedTripId(isExpanded ? null : trip.id)}
-                              className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs flex items-center gap-1 border border-slate-700"
+                              className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs flex items-center gap-1 transition-colors"
                             >
-                              <span>Inspect</span>
+                              <span>Inspection</span>
                               <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                             </button>
 
@@ -337,6 +339,32 @@ export const VehicleTripLogView: React.FC<VehicleTripLogViewProps> = ({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-950/80 border-t border-slate-800 text-xs text-slate-400">
+          <div>
+            Showing {filtered.length === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + pageSize, filtered.length)} of {filtered.length} records
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+            >
+              Previous
+            </button>
+            <span className="font-mono text-slate-400">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

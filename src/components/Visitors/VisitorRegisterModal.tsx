@@ -101,6 +101,29 @@ export const VisitorRegisterModal: React.FC<VisitorRegisterModalProps> = ({
     if (profile.defaultVehiclePlate) setVehiclePlate(profile.defaultVehiclePlate);
   };
 
+  const resetForm = () => {
+    setFullName('');
+    setIdType('National ID');
+    setIdNumber('');
+    setPhoneNumber('');
+    setEmail('');
+    setCompany('');
+    setPhotoUrl(SAMPLE_AVATARS[0]);
+    setHostName('');
+    setHostDepartment(settings.companyDepartments[0] || 'Engineering & Tech');
+    setPurpose('Business Meeting');
+    setExpectedDurationHours(settings.defaultVisitorDurationHours || 3);
+    setVehiclePlate('');
+    setParkingBay('');
+    setEscortRequired(false);
+    setSafetyInductionCompleted(true);
+    setNdaAccepted(true);
+    setNotes('');
+    setAssets([]);
+    setItemInput('');
+    setSerialInput('');
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !idNumber.trim() || !phoneNumber.trim() || !company.trim() || !hostName.trim()) {
@@ -131,12 +154,14 @@ export const VisitorRegisterModal: React.FC<VisitorRegisterModalProps> = ({
         notes: notes.trim() || undefined,
       });
 
+      resetForm();
       setIsSubmitting(false);
       onSuccess(newPass);
       onClose();
     } catch (err: any) {
       setIsSubmitting(false);
-      alert(err?.message || 'Error registering visitor.');
+      const errMsg = err?.message || err?.error_description || 'Database error occurred while registering visitor.';
+      alert(`Database Error: ${errMsg}`);
     }
   };
 

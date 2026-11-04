@@ -16,6 +16,7 @@ import { useSecurity } from '../../context/SecurityContext';
 import { VisitorPass } from '../../types/visitor';
 import { VehicleTrip } from '../../types/vehicle';
 import { OrgConfigModal } from '../Settings/OrgConfigModal';
+import { getDerivedPassStatus } from '../../utils/visitorUtils';
 
 interface GatekeeperPortalViewProps {
   onLogout: () => void;
@@ -59,7 +60,10 @@ export const GatekeeperPortalView: React.FC<GatekeeperPortalViewProps> = ({
 
   // 2. Currently Checked In (Active on-site headcount)
   const activePasses = visitorPasses.filter(
-    (p) => p.status === 'ON_SITE' || p.status === 'OVERDUE'
+    (p) => {
+      const status = getDerivedPassStatus(p);
+      return status === 'ON_SITE' || status === 'OVERDUE';
+    }
   );
   const currentlyCheckedInCount = activePasses.length;
 
@@ -115,6 +119,10 @@ export const GatekeeperPortalView: React.FC<GatekeeperPortalViewProps> = ({
                 </h1>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 tracking-wide uppercase">
                   {settings.organizationShortName || settings.organizationName || 'SECUREGATE'}
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 tracking-wide flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span>Supabase Cloud</span>
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
@@ -369,7 +377,7 @@ export const GatekeeperPortalView: React.FC<GatekeeperPortalViewProps> = ({
                   </tr>
                 ) : (
                   filteredPasses.slice(0, 10).map((pass) => {
-                    const isCheckedOut = pass.status === 'CHECKED_OUT';
+                    const isCheckedOut = getDerivedPassStatus(pass) === 'CHECKED_OUT';
                     const isStaff = pass.visitorCompany?.toLowerCase().includes('staff') || pass.idType === 'Corporate Badge';
                     const formattedTime = new Date(pass.actualDepartureTime || pass.entryTime).toLocaleTimeString([], {
                       hour: '2-digit',

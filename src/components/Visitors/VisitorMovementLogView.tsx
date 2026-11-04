@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Users, 
   Search, 
@@ -14,8 +14,10 @@ import {
   ShieldAlert,
   ArrowUpDown
 } from 'lucide-react';
+import { useDebounce } from 'use-debounce';
 import { useSecurity } from '../../context/SecurityContext';
 import { VisitorPass, VisitorStatus } from '../../types/visitor';
+import { getDerivedPassStatus } from '../../utils/visitorUtils';
 
 interface VisitorMovementLogViewProps {
   onOpenRegister: () => void;
@@ -32,18 +34,28 @@ export const VisitorMovementLogView: React.FC<VisitorMovementLogViewProps> = ({
 }) => {
   const { visitorPasses, toggleWatchlist, currentOfficer } = useSecurity();
   const [search, setSearch] = useState('');
+  const [debouncedSearch] = useDebounce(search, 300);
   const [statusFilter, setStatusFilter] = useState<'ALL' | VisitorStatus>('ALL');
   const [selectedDept, setSelectedDept] = useState<string>('ALL');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 15;
 
   const isSupervisorOrAdmin = currentOfficer.role === 'SUPERVISOR' || currentOfficer.role === 'ADMIN';
 
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter, selectedDept]);
+
   // Filtered passes
   const filtered = visitorPasses.filter((pass) => {
+    const derivedStatus = getDerivedPassStatus(pass);
+
     // Status filter
     if (statusFilter !== 'ALL') {
       if (statusFilter === 'ON_SITE') {
-        if (pass.status !== 'ON_SITE' && pass.status !== 'OVERDUE') return false;
-      } else if (pass.status !== statusFilter) {
+        if (derivedStatus !== 'ON_SITE' && derivedStatus !== 'OVERDUE') return false;
+      } else if (derivedStatus !== statusFilter) {
         return false;
       }
     }
@@ -54,8 +66,8 @@ export const VisitorMovementLogView: React.FC<VisitorMovementLogViewProps> = ({
     }
 
     // Search query
-    if (search.trim()) {
-      const q = search.toLowerCase();
+    if (debouncedSearch.trim()) {
+      const q = debouncedSearch.toLowerCase();
       const match =
         pass.visitorName.toLowerCase().includes(q) ||
         pass.visitorCompany.toLowerCase().includes(q) ||
@@ -69,9 +81,16 @@ export const VisitorMovementLogView: React.FC<VisitorMovementLogViewProps> = ({
     return true;
   });
 
-  const onSiteCount = visitorPasses.filter((p) => p.status === 'ON_SITE' || p.status === 'OVERDUE').length;
-  const overdueCount = visitorPasses.filter((p) => p.status === 'OVERDUE').length;
-  const checkedOutCount = visitorPasses.filter((p) => p.status === 'CHECKED_OUT').length;
+  const onSiteCount = visitorPasses.filter((p) => {
+    const status = getDerivedPassStatus(p);
+    return status === 'ON_SITE' || status === 'OVERDUE';
+  }).length;
+  const overdueCount = visitorPasses.filter((p) => getDerivedPassStatus(p) === 'OVERDUE').length;
+  const checkedOutCount = visitorPasses.filter((p) => getDerivedPassStatus(p) === 'CHECKED_OUT').length;
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const startIndex = (currentPage - 1) * pageSize;
+  const paginatedPasses = filtered.slice(startIndex, startIndex + pageSize);
 
   return (
     <div className="space-y-4">
@@ -121,23 +140,25 @@ export const VisitorMovementLogView: React.FC<VisitorMovementLogViewProps> = ({
             </button>
             <button
               onClick={() => setStatusFilter('ON_SITE')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                 statusFilter === 'ON_SITE'
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/80 shadow-sm'
+                  : 'text-slate-400 hover:text-emerald-400'
               }`}
             >
-              On-Premise ({onSiteCount})
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              <span>On-Site ({onSiteCount})</span>
             </button>
             <button
               onClick={() => setStatusFilter('OVERDUE')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                 statusFilter === 'OVERDUE'
-                  ? 'bg-rose-950 text-rose-300 border border-rose-800 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-rose-950 text-rose-300 border border-rose-800/80 shadow-sm'
+                  : 'text-slate-400 hover:text-rose-400'
               }`}
             >
-              Overstay Alert ({overdueCount})
+              <AlertTriangle className="w-3 h-3 text-rose-400" />
+              <span>Overdue ({overdueCount})</span>
             </button>
             <button
               onClick={() => setStatusFilter('CHECKED_OUT')}
@@ -147,41 +168,70 @@ export const VisitorMovementLogView: React.FC<VisitorMovementLogViewProps> = ({
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Checked Out ({checkedOutCount})
+              Departed ({checkedOutCount})
             </button>
           </div>
 
-          {/* Search box */}
-          <div className="relative flex-1 max-w-sm">
-            <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search visitor, badge, company, host, plate..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-slate-950/60 border border-slate-800 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-emerald-500"
-            />
+          {/* Department Filter */}
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <Building2 className="w-3.5 h-3.5 text-slate-500" />
+              <span>Dept:</span>
+            </div>
+            <select
+              value={selectedDept}
+              onChange={(e) => setSelectedDept(e.target.value)}
+              className="px-2.5 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300 focus:outline-none focus:border-slate-600"
+            >
+              <option value="ALL">All Departments</option>
+              <option value="Executive Management">Executive Management</option>
+              <option value="Engineering & Tech">Engineering & Tech</option>
+              <option value="Operations & Logistics">Operations & Logistics</option>
+              <option value="Human Resources">Human Resources</option>
+              <option value="Finance & Accounts">Finance & Accounts</option>
+              <option value="Legal & Compliance">Legal & Compliance</option>
+            </select>
           </div>
+        </div>
+
+        {/* Search Input */}
+        <div className="relative">
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search visitor passes by visitor name, badge number, national ID, company, host, or vehicle plate..."
+            className="w-full pl-9 pr-4 py-2 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/80 transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-300"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Movement Table */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900 overflow-hidden shadow-sm">
+      {/* Main Table Container */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-800 bg-slate-950/40 text-slate-400 font-mono text-[11px]">
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-950/70 border-b border-slate-800 text-[11px] text-slate-400 tracking-wider uppercase font-mono">
+              <tr>
                 <th className="py-3 px-4 font-medium">VISITOR & BADGE</th>
-                <th className="py-3 px-4 font-medium">ORGANIZATION</th>
+                <th className="py-3 px-4 font-medium">ORGANIZATION / ID</th>
                 <th className="py-3 px-4 font-medium">HOST & PURPOSE</th>
-                <th className="py-3 px-4 font-medium">ENTRY GATE & TIME</th>
+                <th className="py-3 px-4 font-medium">ENTRY DETAILS</th>
                 <th className="py-3 px-4 font-medium">DEPARTURE</th>
                 <th className="py-3 px-4 font-medium">STATUS</th>
                 <th className="py-3 px-4 font-medium text-right">ACTIONS</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/80">
-              {filtered.length === 0 ? (
+              {paginatedPasses.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
                     <Users className="w-8 h-8 mx-auto text-slate-600 mb-2" />
@@ -190,10 +240,11 @@ export const VisitorMovementLogView: React.FC<VisitorMovementLogViewProps> = ({
                   </td>
                 </tr>
               ) : (
-                filtered.map((pass) => {
-                  const isOnSite = pass.status === 'ON_SITE' || pass.status === 'OVERDUE';
-                  const isOverdue = pass.status === 'OVERDUE';
-                  const isCheckedOut = pass.status === 'CHECKED_OUT';
+                paginatedPasses.map((pass) => {
+                  const derivedStatus = getDerivedPassStatus(pass);
+                  const isOnSite = derivedStatus === 'ON_SITE' || derivedStatus === 'OVERDUE';
+                  const isOverdue = derivedStatus === 'OVERDUE';
+                  const isCheckedOut = derivedStatus === 'CHECKED_OUT';
 
                   return (
                     <tr key={pass.id} className="hover:bg-slate-800/40 transition-colors">
@@ -333,6 +384,32 @@ export const VisitorMovementLogView: React.FC<VisitorMovementLogViewProps> = ({
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Pagination Footer */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 bg-slate-950/80 border-t border-slate-800 text-xs text-slate-400">
+          <div>
+            Showing {filtered.length === 0 ? 0 : startIndex + 1}–{Math.min(startIndex + pageSize, filtered.length)} of {filtered.length} records
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+            >
+              Previous
+            </button>
+            <span className="font-mono text-slate-400">
+              Page {currentPage} of {totalPages}
+            </span>
+            <button
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>

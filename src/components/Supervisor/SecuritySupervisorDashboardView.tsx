@@ -17,6 +17,7 @@ import {
 import { useSecurity } from '../../context/SecurityContext';
 import { VisitorPass } from '../../types/visitor';
 import { VehicleTrip } from '../../types/vehicle';
+import { getDerivedPassStatus } from '../../utils/visitorUtils';
 
 interface SecuritySupervisorDashboardViewProps {
   onLogout: () => void;
@@ -47,9 +48,12 @@ export const SecuritySupervisorDashboardView: React.FC<SecuritySupervisorDashboa
 
   // Compute live operational metrics
   const onSiteVisitors = visitorPasses.filter(
-    (p) => p.status === 'ON_SITE' || p.status === 'OVERDUE'
+    (p) => {
+      const status = getDerivedPassStatus(p);
+      return status === 'ON_SITE' || status === 'OVERDUE';
+    }
   );
-  const overdueVisitors = visitorPasses.filter((p) => p.status === 'OVERDUE');
+  const overdueVisitors = visitorPasses.filter((p) => getDerivedPassStatus(p) === 'OVERDUE');
   const activeTrips = trips.filter((t) => t.status === 'ACTIVE');
 
   // Flagged vehicle trips (returned with condition damage remarks or abnormal fuel drop)
@@ -68,7 +72,8 @@ export const SecuritySupervisorDashboardView: React.FC<SecuritySupervisorDashboa
 
   // Filtered passes for live table
   const filteredPasses = visitorPasses.filter((p) => {
-    if (statusFilter !== 'ALL' && p.status !== statusFilter) return false;
+    const derivedStatus = getDerivedPassStatus(p);
+    if (statusFilter !== 'ALL' && derivedStatus !== statusFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       return (
@@ -88,7 +93,8 @@ export const SecuritySupervisorDashboardView: React.FC<SecuritySupervisorDashboa
     if (type === 'visitors') {
       csvContent += 'Badge,Visitor Name,Company,Host,Department,Entry Time,Departure Time,Status,Officer\n';
       filteredPasses.forEach((p) => {
-        csvContent += `"${p.badgeNumber}","${p.visitorName}","${p.visitorCompany}","${p.hostName}","${p.hostDepartment}","${p.entryTime}","${p.actualDepartureTime || 'N/A'}","${p.status}","${p.officerCheckInName}"\n`;
+        const derivedStatus = getDerivedPassStatus(p);
+        csvContent += `"${p.badgeNumber}","${p.visitorName}","${p.visitorCompany}","${p.hostName}","${p.hostDepartment}","${p.entryTime}","${p.actualDepartureTime || 'N/A'}","${derivedStatus}","${p.officerCheckInName}"\n`;
       });
     } else {
       csvContent += 'Trip ID,Fleet #,Plate,Driver,Destination,Departure Time,Return Time,Status,Departure Odometer,Return Odometer\n';
@@ -422,15 +428,20 @@ export const SecuritySupervisorDashboardView: React.FC<SecuritySupervisorDashboa
                           </td>
 
                           <td className="px-4 py-3.5">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                              pass.status === 'ON_SITE'
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : pass.status === 'OVERDUE'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse font-extrabold'
-                                : 'bg-slate-100 text-slate-600 border border-slate-200'
-                            }`}>
-                              {pass.status === 'ON_SITE' ? '✓ On-Site' : pass.status === 'OVERDUE' ? '⚠ Overdue' : '✗ Departed'}
-                            </span>
+                            {(() => {
+                              const derivedStatus = getDerivedPassStatus(pass);
+                              return (
+                                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                  derivedStatus === 'ON_SITE'
+                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                    : derivedStatus === 'OVERDUE'
+                                    ? 'bg-amber-50 text-amber-700 border border-amber-200 animate-pulse font-extrabold'
+                                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                                }`}>
+                                  {derivedStatus === 'ON_SITE' ? '✓ On-Site' : derivedStatus === 'OVERDUE' ? '⚠ Overdue' : '✗ Departed'}
+                                </span>
+                              );
+                            })()}
                           </td>
                         </tr>
                       ))

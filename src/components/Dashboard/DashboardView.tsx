@@ -20,6 +20,7 @@ import {
 import { useSecurity } from '../../context/SecurityContext';
 import { VisitorPass } from '../../types/visitor';
 import { OrgVehicle, VehicleTrip } from '../../types/vehicle';
+import { getDerivedPassStatus } from '../../utils/visitorUtils';
 
 interface DashboardViewProps {
   onOpenRegister: () => void;
@@ -55,10 +56,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Visitor calculations
   const onSiteVisitors = visitorPasses.filter(
-    (p) => p.status === 'ON_SITE' || p.status === 'OVERDUE'
+    (p) => {
+      const status = getDerivedPassStatus(p);
+      return status === 'ON_SITE' || status === 'OVERDUE';
+    }
   );
-  const overdueVisitors = visitorPasses.filter((p) => p.status === 'OVERDUE');
-  const checkedOutToday = visitorPasses.filter((p) => p.status === 'CHECKED_OUT').length;
+  const overdueVisitors = visitorPasses.filter((p) => getDerivedPassStatus(p) === 'OVERDUE');
+  const checkedOutToday = visitorPasses.filter((p) => getDerivedPassStatus(p) === 'CHECKED_OUT').length;
   const totalEntriesToday = visitorPasses.length;
 
   // Occupancy percentage against configured facility capacity
@@ -327,7 +331,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
             ) : (
               onSiteVisitors.map((pass) => {
-                const isOverdue = pass.status === 'OVERDUE';
+                const isOverdue = getDerivedPassStatus(pass) === 'OVERDUE';
                 return (
                   <div
                     key={pass.id}

@@ -10,7 +10,7 @@ export const INITIAL_OFFICERS: SecurityOfficer[] = [
     name: 'Anara Evance',
     badgeNumber: '129',
     role: 'OFFICER',
-    pin: '129',
+    pin: '$2b$10$j/GK9aTVhm0Ky0/hD5uWU.6.I16SvCKMgxZ6rRgtO6lnFNK5J8JFC', // bcrypt hash for '129'
     email: 'a.evance@securegate.local',
     assignedGate: 'Gate 1 - Main North Entrance',
     active: true,
@@ -22,7 +22,7 @@ export const INITIAL_OFFICERS: SecurityOfficer[] = [
     name: 'Elena Rostova',
     badgeNumber: 'SUP-002',
     role: 'SUPERVISOR',
-    pin: '2222',
+    pin: '$2b$10$rQMsX.8xyOXam2A5FIaZVuJDXRCImKo9UBBK9Rf/Mgj19x.VWxYfe', // bcrypt hash for '2222'
     email: 'e.rostova@securegate.local',
     assignedGate: 'Gate 1 - Main North Entrance',
     active: true,
@@ -34,7 +34,7 @@ export const INITIAL_OFFICERS: SecurityOfficer[] = [
     name: 'Marcus Vance',
     badgeNumber: 'ADM-001',
     role: 'ADMIN',
-    pin: '0000',
+    pin: '$2b$10$63I8298BUhNtR/spY8e8Z.qycYorcQ4xK3pf8Pf3AEontnPyQvN6.', // bcrypt hash for '0000'
     email: 'm.vance@securegate.local',
     assignedGate: 'Gate 1 - Main North Entrance',
     active: true,
@@ -46,7 +46,7 @@ export const INITIAL_OFFICERS: SecurityOfficer[] = [
     name: 'Dr. Sarah Al-Mansoor',
     badgeNumber: 'MGT-101',
     role: 'MANAGEMENT',
-    pin: '4444',
+    pin: '$2b$10$1tXkDbxIw0IIyzu3vWL77eEz9RIozLve.hRZzIkgiq3rwmRAMrjne', // bcrypt hash for '4444'
     email: 's.almansoor@securegate.local',
     assignedGate: 'Executive Headquarters Suite',
     active: true,
@@ -58,7 +58,7 @@ export const INITIAL_OFFICERS: SecurityOfficer[] = [
     name: 'David Chen',
     badgeNumber: 'SEC-088',
     role: 'OFFICER',
-    pin: '5678',
+    pin: '$2b$10$ebDpeM71Zal3aKjX1hGct.E0Nkwmq1y.CcNHapefuRqFtm2dpybHG', // bcrypt hash for '5678'
     email: 'd.chen@securegate.local',
     assignedGate: 'Gate 2 - Logistics & Heavy Cargo',
     active: true,
