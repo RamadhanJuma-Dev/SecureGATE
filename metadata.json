@@ -1,0 +1,6 @@
+{
+  "name": "SECUREGATE",
+  "description": "Configurable, user-friendly and efficient Security Check-In and Check-Out Management System that automates visitor registration, returning visitor retrieval, vehicle movement tracking, real-time occupancy monitoring, and security audit reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
